@@ -1,0 +1,16 @@
+https:
+  - domain: api.apis.guru
+    type: get
+    headers:
+      - key: accept
+        value: text/plain
+    expect:
+      - status: 200
+    api:
+      - /v2/list.json
+      - /v2/list2.json
+    query_strings:
+      - key: limit
+        value: "10"
+      - key: t
+        value: year

@@ -1,0 +1,66 @@
+https:
+  - domain: api.apis.guru
+    type: get
+    headers:
+      - key: accept
+        value: text/plain
+    expect:
+      - status: 200
+    api:
+      - /v2/list.json
+  - domain: www.reddit.com
+    type: get
+    api:
+      - /r/Wallstreetbets/top.json
+    query_strings:
+      - key: limit
+        value: "10"
+      - key: t
+        value: year
+    expect:
+      - status: 200
+  - type: delete
+    domain: httpbin.org
+    api:
+      - /status/200
+    headers:
+      - key: accept
+        value: text/plain
+    expect:
+      - status: 200
+  - type: get
+    domain: httpbin.org
+    api:
+      - /status/200
+    headers:
+      - key: accept
+        value: text/plain
+    expect:
+      - status: 200
+  - type: patch
+    domain: httpbin.org
+    api:
+    - /status/200
+    headers:
+      - key: accept
+        value: text/plain
+    expect:
+      - status: 200
+  - type: post
+    domain: httpbin.org
+    api:
+    - /status/200
+    headers:
+      - key: accept
+        value: text/plain
+    expect:
+      - status: 200
+  - type: put
+    domain: httpbin.org
+    api:
+    - /status/200
+    headers:
+      - key: accept
+        value: text/plain
+    expect:
+      - status: 200
