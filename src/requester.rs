@@ -1,11 +1,9 @@
+use serde_yaml::Value;
 use ureq::Request;
-use yaml_rust2::Yaml;
 
-pub fn init_requests(yaml: Vec<Yaml>) -> Result<(), Box<dyn std::error::Error>> {
-    let doc = &yaml[0];
-
-    match doc["https"].is_badvalue() {
-        false => run_http_requests(doc["https"].clone()),
+pub fn init_requests(yaml: Value) -> Result<(), Box<dyn std::error::Error>> {
+    match yaml["https"].is_null() {
+        false => run_http_requests(yaml.clone()),
         true => panic!(
             "No valid requests to be sent from the yaml, check your input file for syntax error"
         ),
@@ -14,21 +12,21 @@ pub fn init_requests(yaml: Vec<Yaml>) -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
-fn run_http_requests(http_yaml: Yaml) {
-    let reqs_ctx = http_yaml.into_iter();
-
-    for ctx in reqs_ctx {
-        // dbg!(&ctx);
-        match &ctx["type"].as_str() {
+fn run_http_requests(yaml: Value) {
+    let yaml_length = yaml["https"].as_sequence().unwrap().len();
+    let mut count = 0;
+    while count < yaml_length {
+        match yaml["https"][count]["type"].as_str() {
             Some("put") | Some("get") | Some("patch") | Some("delete") | Some("post") => {
-                perform_req(ctx)
+                perform_req(yaml["https"][count].clone())
             }
             _ => panic!("Not a valid request type"),
         }
+        count += 1;
     }
 }
 
-fn perform_req(ctx: Yaml) {
+fn perform_req(ctx: Value) {
     let fqdn = build_domain("https://", ctx["domain"].as_str().unwrap());
     println!(
         "Commence api test for {} {} requests",
@@ -39,11 +37,13 @@ fn perform_req(ctx: Yaml) {
             .to_uppercase()
     );
 
-    let api_ctx = ctx["api"].clone().into_iter();
+    let api_ctx = ctx["api"].clone();
+    let api_cnt = api_ctx.as_sequence().unwrap().len();
+    let mut cur_idx = 0;
 
-    for api in api_ctx {
+    while cur_idx < api_cnt {
         let mut api_call = fqdn.clone();
-        api_call.push_str(api.as_str().unwrap());
+        api_call.push_str(api_ctx[cur_idx].as_str().unwrap());
 
         let req_type = ctx["type"].as_str().unwrap();
 
@@ -60,14 +60,16 @@ fn perform_req(ctx: Yaml) {
             }
             Err(_) => panic!("Unexpected error occurred"),
         }
+
+        cur_idx += 1;
     }
 }
 
 fn choose_request_type(
     req_type: &str,
     api_call: &str,
-    headers: Yaml,
-    query_strings: Yaml,
+    headers: Value,
+    query_strings: Value,
 ) -> Request {
     let mut request = match req_type.to_lowercase().as_str() {
         "get" => ureq::get(api_call),
@@ -77,8 +79,15 @@ fn choose_request_type(
         "put" => ureq::put(api_call),
         _ => panic!("Not a valid request type"),
     };
-    request = set_headers(request, headers);
-    request = set_querystrings(request, query_strings);
+
+    if !headers.is_null() {
+        request = set_headers(request, headers);
+    }
+
+    if !query_strings.is_null() {
+        request = set_querystrings(request, query_strings);
+    }
+
     request
 }
 
@@ -86,39 +95,41 @@ fn build_domain(fqdn: &str, domain: &str) -> String {
     format!("{fqdn}{domain}")
 }
 
-fn set_headers(mut req: Request, header_ctx: Yaml) -> Request {
-    let header_iter = header_ctx.into_iter();
+fn set_headers(mut req: Request, header_ctx: Value) -> Request {
+    let header_cnt = header_ctx.as_sequence().unwrap().len();
+    let mut cur_idx = 0;
 
     req = req.set("reqev", "true");
 
-    for header in header_iter {
+    while cur_idx < header_cnt {
         req = req.set(
-            header["key"]
+            header_ctx[cur_idx]["key"]
                 .as_str()
                 .expect("Check your yaml, 'key' of 'headers' misconfigured"),
-            header["value"]
+            header_ctx[cur_idx]["value"]
                 .as_str()
                 .expect("Check your yaml, 'value' of 'headers' misconfigured"),
         );
+        cur_idx += 1;
     }
 
     req
 }
 
-fn set_querystrings(mut req: Request, qs_ctx: Yaml) -> Request {
-    let qs_iter = qs_ctx.into_iter();
+fn set_querystrings(mut req: Request, qs_ctx: Value) -> Request {
+    let qs_cnt = qs_ctx.as_sequence().unwrap().len();
+    let mut cur_idx = 0;
 
-    req = req.set("reqev", "true");
-
-    for qs in qs_iter {
+    while cur_idx < qs_cnt {
         req = req.query(
-            qs["key"]
+            qs_ctx[cur_idx]["key"]
                 .as_str()
                 .expect("Check your yaml, 'key' of 'query_strings' misconfigured"),
-            qs["value"]
+            qs_ctx[cur_idx]["value"]
                 .as_str()
                 .expect("Check your yaml, 'value' of 'query_strings' misconfigured"),
         );
+        cur_idx += 1;
     }
 
     req
@@ -127,7 +138,7 @@ fn set_querystrings(mut req: Request, qs_ctx: Yaml) -> Request {
 #[cfg(test)]
 mod requester_tests {
     use super::*;
-    use yaml_rust2::{Yaml, YamlLoader};
+    use serde_yaml::from_str;
 
     #[test]
     fn test_build_domain_simple() {
@@ -143,12 +154,14 @@ mod requester_tests {
           value: text/plain
         ";
 
-        let docs = YamlLoader::load_from_str(headers).unwrap();
-        let h_yaml = &docs[0];
+        let yaml_contents: Value = from_str(headers).unwrap();
+
+        // let docs = YamlLoader::load_from_str(headers).unwrap();
+        // let h_yaml = &docs[0];
 
         let mut req = ureq::get("http://example.com");
 
-        req = set_headers(req, h_yaml["headers"].clone());
+        req = set_headers(req, yaml_contents["headers"].clone());
 
         assert_eq!("true", req.header("reqev").unwrap());
         assert_eq!("text/plain", req.header("accept").unwrap());
@@ -164,12 +177,14 @@ mod requester_tests {
             value: year
         ";
 
-        let docs = YamlLoader::load_from_str(headers).unwrap();
-        let q_yaml = &docs[0];
+        let yaml_contents: Value = from_str(headers).unwrap();
+
+        // let docs = YamlLoader::load_from_str(headers).unwrap();
+        // let q_yaml = &docs[0];
 
         let mut req = ureq::get("http://example.com");
 
-        req = set_headers(req, q_yaml["query_strings"].clone());
+        req = set_headers(req, yaml_contents["query_strings"].clone());
 
         assert_eq!("10", req.header("limit").unwrap());
         assert_eq!("year", req.header("t").unwrap());
@@ -179,8 +194,8 @@ mod requester_tests {
     #[should_panic]
     fn test_choose_invalid_request_type() {
         let api_call = String::new();
-        let h_yaml = Yaml::from_str("1234");
-        let q_yaml = Yaml::from_str("abcd");
+        let h_yaml: Value = from_str("1234").unwrap();
+        let q_yaml: Value = from_str("abcd").unwrap();
         let _req = choose_request_type("bad test", &api_call, h_yaml, q_yaml);
     }
 }

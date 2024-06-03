@@ -1,13 +1,13 @@
-use std::io::Read;
-use yaml_rust2::{Yaml, YamlLoader};
+use serde_yaml::{from_reader, Value};
 
 pub struct FileContext {
     pub(crate) path: std::path::PathBuf,
     pub(crate) format: String,
 }
 
-pub fn read(file_ctx: FileContext) -> Vec<Yaml> {
-    let file_type = &file_ctx.format.clone();
+pub fn read(file_ctx: FileContext) -> Value {
+    let file_type = &file_ctx.format;
+
     if file_type.to_lowercase().trim() == "yaml" {
         read_yaml(file_ctx).expect("Error occurred while reading yaml file")
     } else {
@@ -16,16 +16,10 @@ pub fn read(file_ctx: FileContext) -> Vec<Yaml> {
     }
 }
 
-fn read_yaml(file_ctx: FileContext) -> Result<Vec<Yaml>, Box<dyn std::error::Error>> {
-    let mut file = std::fs::File::open(file_ctx.path)?;
-    let mut contents = String::new();
-
-    file.read_to_string(&mut contents)
-        .expect("Unable to yaml read file");
-
-    let docs = YamlLoader::load_from_str(&contents).expect("Error while parsing yaml");
-
-    Ok(docs)
+fn read_yaml(file_ctx: FileContext) -> Result<Value, Box<dyn std::error::Error>> {
+    let f = std::fs::File::open(file_ctx.path)?;
+    let yaml_contents: Value = from_reader(f)?;
+    Ok(yaml_contents)
 }
 
 #[cfg(test)]
@@ -38,8 +32,7 @@ mod reader_tests {
             path: std::path::PathBuf::from("tests/simple.yaml"),
         };
 
-        let docs = read(file_ctx);
-        let doc = &docs[0];
+        let doc = read(file_ctx);
 
         assert_eq!("get", doc["https"][0]["type"].as_str().unwrap());
         assert_eq!("api.apis.guru", doc["https"][0]["domain"].as_str().unwrap());
@@ -60,7 +53,6 @@ mod reader_tests {
             "/v2/list2.json",
             doc["https"][0]["api"][1].as_str().unwrap()
         );
-        assert!(doc["abcd1234"].is_badvalue())
     }
 
     #[test]

@@ -59,11 +59,12 @@ https:
 ```
 
 # Roadmap
-Updated 2024/05/27
+Updated 2024/06/02
 - [ ] Add functionality to specify expected response for get, post, etc.
 - [ ] Add support for RPC?
 - [ ] Add support for json file format
 - [ ] Add support for Auth tokens
+- [ ] Clean/Simplify logic for serializing yaml
 
 # Contributing
 Message me, I still have to work it out.
