@@ -58,8 +58,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - name: Install capnp
-        run: sudo apt-get install capnproto
       - name: Linting
         run: cargo clippy -- -D warnings
 
